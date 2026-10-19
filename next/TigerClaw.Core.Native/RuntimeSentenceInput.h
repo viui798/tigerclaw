@@ -208,6 +208,16 @@ namespace tiger::core
             if (_session.Request().generation != generation) Schedule();
             return {true, false, std::move(commit)};
         }
+        std::optional<std::u16string> SelectCandidate(std::size_t index)
+        {
+            EnsureCurrent();
+            if (!_session.Select(index)) return {};
+            auto result = _session.FinishSelected();
+            if (!result) return {};
+            _worker.Cancel();
+            CancelNeural();
+            return std::move(result);
+        }
         std::u16string FinishWithPunctuation(std::u16string_view punctuation)
         {
             EnsureCurrent();

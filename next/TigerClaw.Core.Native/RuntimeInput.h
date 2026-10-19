@@ -159,10 +159,26 @@ namespace tiger::core
             {
                 _sentence->Input().Pump();
                 CandidatePage page;
+#ifdef TIGERCLAW_MACOS
+                // macOS candidate panel pages around the current selection so
+                // Up/Down beyond the first page keeps a visible highlight.
+                const auto& session = _sentence->Input().Session();
+                const auto candidates = session.PublishedCandidates();
+                auto size = static_cast<std::size_t>(std::clamp(_settings.pageSize, 1, 10));
+                auto total = candidates.size();
+                auto selected = std::min(session.SelectedIndex(), total ? total - 1 : 0);
+                std::size_t pageIndex = size ? selected / size : 0;
+                std::size_t start = pageIndex * size;
+                auto count = std::min(size, total > start ? total - start : 0);
+                for (std::size_t i = 0; i < count; ++i) page.entries.push_back(candidates[start + i]);
+                page.total = static_cast<std::uint32_t>(total);
+                page.pageIndex = static_cast<std::uint32_t>(pageIndex);
+#else
                 const auto candidates = _sentence->Input().Session().PublishedCandidates();
                 auto count = std::min(candidates.size(), static_cast<std::size_t>(std::clamp(_settings.pageSize, 1, 10)));
                 for (std::size_t i = 0; i < count; ++i) page.entries.push_back(candidates[i]);
                 page.total = static_cast<std::uint32_t>(candidates.size());
+#endif
                 page.found = page.total != 0;
                 return page;
             }
@@ -176,6 +192,36 @@ namespace tiger::core
         std::size_t SelectedCandidateIndex() const
         {
             return UsesSentenceComposition() ? _sentence->Input().Session().SelectedIndex() : 0;
+        }
+        // Host-side "add word" command: append text to a code in the live table
+        // and persist an adjustment record beside the schema.
+        bool AddWord(std::u16string_view code, std::u16string_view text)
+        {
+            Synchronize();
+            return _runtime.AdjustCandidate(CandidateAdjustment::Add, code, text);
+        }
+        // Sentence candidates are selected by absolute index in the published
+        // list. Ordinary candidates reach the same code path through their
+        // configured number keys in the host adapter.
+        std::optional<PostProcessResult> SelectSentenceCandidate(std::size_t index)
+        {
+            RefreshOutputContext(); Synchronize();
+            if (!UsesSentenceComposition()) return std::nullopt;
+            auto text = _sentence->Input().SelectCandidate(index);
+            if (!text) return std::nullopt;
+            PostProcessResult result{true, std::move(*text), {}, false};
+            InputKeyEvent event;
+            event.vk = 32;
+            event.action = u"down";
+            return _session.ProcessExternalResult(event, 32, std::move(result), _context);
+        }
+        const std::u16string& SchemaName() const { return _snapshot->schemaName; }
+        const ConfigValues& Config() const { return _snapshot->config; }
+        std::u16string ConfigValue(std::u16string_view key, std::u16string fallback = {}) const
+        {
+            for (const auto& [name, value] : _snapshot->config)
+                if (name == key) return value;
+            return fallback;
         }
         const ChineseInputSession& Session() const { return _session; }
         std::u16string CandidateDisplay(std::u16string_view candidate,

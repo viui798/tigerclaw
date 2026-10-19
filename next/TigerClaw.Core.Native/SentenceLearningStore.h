@@ -3,6 +3,7 @@
 #pragma once
 #include "SentenceLearning.h"
 #include "LearningText.h"
+#include "AtomicSharedPtr.h"
 #include <filesystem>
 #include <fstream>
 #include <mutex>
@@ -31,7 +32,7 @@ public:
 private:
     std::filesystem::path path_;
     mutable std::mutex mutex_;
-    std::atomic<std::shared_ptr<const SentenceLearningSnapshot>> snapshot_{SentenceLearningSnapshot::build({})};
+    AtomicSharedPtr<const SentenceLearningSnapshot> snapshot_{SentenceLearningSnapshot::build({})};
     std::uintmax_t size_=static_cast<std::uintmax_t>(-1);
     std::filesystem::file_time_type stamp_{};
     std::int64_t lastRead_=0;

@@ -7,6 +7,7 @@
 #include "ActionShortcuts.h"
 #include "LexiconAssembly.h"
 #include "OrdinaryComposition.h"
+#include "AtomicSharedPtr.h"
 #include <atomic>
 #include <memory>
 #include <mutex>
@@ -67,7 +68,7 @@ namespace tiger::core
         void LoadSnapshotNoLock(ConfigValues config, const AcceptSnapshot& accept, bool reloadBindings, bool configChanged = true);
         bool SwitchSchemaNoLock(std::u16string_view name, const AcceptSnapshot& accept);
         std::filesystem::path _executableDirectory;
-        std::atomic<std::shared_ptr<const RuntimeLexiconSnapshot>> _current;
+        AtomicSharedPtr<const RuntimeLexiconSnapshot> _current;
         std::mutex _writer;
         std::u16string _cachedName;
         std::shared_ptr<const SchemaLexicon> _cachedSchema;

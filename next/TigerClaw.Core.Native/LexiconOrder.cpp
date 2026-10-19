@@ -57,8 +57,35 @@ namespace tiger::core
         for (auto& item : textFiles) result.push_back(std::move(item.path));
         return result;
 #else
-        (void)directory; (void)locale;
-        throw std::runtime_error("CurrentCulture directory ordering requires Windows NLS in this build");
+        // macOS/Unix ordering. Windows uses NLS sort keys here; the portable
+        // build keeps the same contract: the schema-named file is preferred,
+        // then the remaining .txt/.dict.yaml files are ordered by a stable,
+        // locale-independent folded Ordinal comparison.
+        (void)locale;
+        struct File { std::filesystem::path path; std::u16string key; bool preferred; };
+        std::vector<File> files;
+        auto absoluteDirectory = std::filesystem::absolute(directory).lexically_normal();
+        auto schema = absoluteDirectory.filename().u16string();
+        if (schema.empty()) schema = absoluteDirectory.parent_path().filename().u16string();
+        auto preferredText = FoldOrdinalCode(schema + u".txt");
+        auto preferredYaml = FoldOrdinalCode(schema + u".dict.yaml");
+        for (const auto& item : std::filesystem::directory_iterator(directory))
+        {
+            if (item.is_directory()) continue;
+            auto name = item.path().filename().u16string();
+            auto folded = FoldOrdinalCode(name);
+            if (!folded.ends_with(u".TXT") && !folded.ends_with(u".DICT.YAML")) continue;
+            bool preferred = folded == preferredText || folded == preferredYaml;
+            files.push_back({item.path(), std::move(folded), preferred});
+        }
+        std::stable_sort(files.begin(), files.end(), [](const File& a, const File& b)
+        {
+            if (a.preferred != b.preferred) return a.preferred;
+            return a.key < b.key;
+        });
+        std::vector<std::filesystem::path> result;
+        for (auto& item : files) result.push_back(std::move(item.path));
+        return result;
 #endif
     }
 }

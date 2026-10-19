@@ -83,8 +83,16 @@ namespace tiger::core
             size = written + 1;
         }
 #else
-        (void)executableDirectory; (void)configured;
-        throw std::runtime_error("Windows runtime path resolution requires Windows");
+        // macOS/Unix: the code root is either an absolute path or relative to
+        // the directory that hosts the input method resources.
+        auto normalized = NormalizeCodeRoot(configured);
+        if (normalized.find(char16_t(0)) != normalized.npos)
+            throw std::invalid_argument("Embedded NUL in code root");
+        if (normalized.empty()) throw std::invalid_argument("Empty code root");
+        bool rooted = normalized.front() == u'/';
+        std::filesystem::path path(normalized);
+        if (!rooted) path = executableDirectory / path;
+        return std::filesystem::absolute(path).lexically_normal();
 #endif
     }
 
