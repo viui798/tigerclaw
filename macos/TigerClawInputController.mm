@@ -84,6 +84,38 @@ void TigerClawPreloadEngine(void)
     }
 }
 
+// InputMethodKit does not invoke menu actions with the NSMenuItem as the
+// sender. The command dictionary arrives through doCommandBySelector:; asking
+// it for representedObject raises an exception and the schema never switches.
+// Extract the schema name from both the menu item and the command dictionary.
+static NSString *SchemaNameFromSender(id sender)
+{
+    if ([sender isKindOfClass:[NSMenuItem class]])
+        return [(NSMenuItem *)sender representedObject];
+    if ([sender isKindOfClass:[NSDictionary class]])
+    {
+        NSDictionary *command = (NSDictionary *)sender;
+        for (NSString *key in @[@"representedObject", @"MenuItem", @"menuItem",
+                                @"IMKCommandMenuItem", @"NSMenuItem", @"Item"])
+        {
+            id value = [command objectForKey:key];
+            if ([value isKindOfClass:[NSMenuItem class]])
+                return [(NSMenuItem *)value representedObject];
+            if ([value isKindOfClass:[NSString class]])
+                return value;
+        }
+        NSNumber *tag = [command objectForKey:@"tag"] ?: [command objectForKey:@"Tag"];
+        if ([tag isKindOfClass:[NSNumber class]])
+        {
+            auto names = Engine::Shared().SchemaNames();
+            NSInteger index = tag.integerValue;
+            if (index >= 0 && index < (NSInteger)names.size())
+                return ToNSString(names[static_cast<std::size_t>(index)]);
+        }
+    }
+    return nil;
+}
+
 @interface TigerClawInputController : IMKInputController
 @end
 
@@ -122,6 +154,14 @@ void TigerClawPreloadEngine(void)
     return self;
 }
 
+- (void)dealloc
+{
+    [_pumpTimer invalidate];
+    if (_clientBundleId) [_clientBundleId release];
+    if (_lastMarked) [_lastMarked release];
+    [super dealloc];
+}
+
 - (NSUInteger)recognizedEvents:(id)sender
 {
     // IMK only forwards key events to handleEvent: when declared here. Text
@@ -135,15 +175,17 @@ void TigerClawPreloadEngine(void)
     NSMenu *menu = [[[NSMenu alloc] initWithTitle:@"虎爪"] autorelease];
     Engine &engine = Engine::Shared();
     auto current = engine.CurrentSchema();
-    for (const auto &name : engine.SchemaNames())
+    auto names = engine.SchemaNames();
+    for (std::size_t i = 0; i < names.size(); ++i)
     {
-        NSString *title = ToNSString(name);
+        NSString *title = ToNSString(names[i]);
         NSMenuItem *item = [[[NSMenuItem alloc] initWithTitle:title
                                                        action:@selector(selectSchema:)
                                                 keyEquivalent:@""] autorelease];
         item.target = self;
         item.representedObject = title;
-        item.state = name == current ? NSControlStateValueOn : NSControlStateValueOff;
+        item.tag = static_cast<NSInteger>(i);
+        item.state = names[i] == current ? NSControlStateValueOn : NSControlStateValueOff;
         [menu addItem:item];
     }
     [menu addItem:[NSMenuItem separatorItem]];
@@ -160,14 +202,18 @@ void TigerClawPreloadEngine(void)
     return menu;
 }
 
-- (void)selectSchema:(NSMenuItem *)sender
+- (void)selectSchema:(id)sender
 {
-    NSString *name = sender.representedObject;
-    if (!name.length) return;
+    NSString *name = SchemaNameFromSender(sender);
+    if (!name.length)
+    {
+        NSLog(@"TigerClaw menu: no schema name in sender: %@", sender);
+        return;
+    }
+    NSLog(@"TigerClaw menu: switch schema to %@", name);
     Engine::Shared().Cancel();
     std::string error;
-    if (!Engine::Shared().SwitchSchema(ToU16String(name), error))
-    {
+    if (!Engine::Shared().SwitchSchema(ToU16String(name), error)) {
         NSLog(@"TigerClaw schema switch failed: %s", error.c_str());
         NSBeep();
         return;

@@ -39,6 +39,9 @@ namespace tiger::core
             _context = std::move(context);
             RefreshOutputContext();
             Synchronize();
+            if (_sentence && !_sentence->Snapshot() &&
+                GetSentenceEligibility(_snapshot->config, _snapshot->schemaName).input)
+                _sentence->Refresh(_snapshot);
             // A callback can publish another snapshot during this event. Keep
             // the event's original tables/bindings alive until dispatch returns.
             auto eventSnapshot = _snapshot;
@@ -46,7 +49,7 @@ namespace tiger::core
             auto switchRecent = [this] { return SwitchRecentSchema(); };
             auto adjust = [this](CandidateAdjustment op, std::u16string_view code, std::u16string_view text)
                 { return _runtime.AdjustCandidate(op, code, text); };
-            auto result = _sentence ? _sentence->ProcessKey(event, _session, *eventSnapshot->schema, *eventSnapshot->pinyin, eventSettings,
+            auto result = (_sentence && _sentence->Snapshot()) ? _sentence->ProcessKey(event, _session, *eventSnapshot->schema, *eventSnapshot->pinyin, eventSettings,
                 Boolean(u"`\u952e\u62fc\u97f3\u53cd\u67e5", true),
                 Boolean(u"Ctrl+\u7a7a\u683c\u5207\u6362\u4e2d\u82f1\u6587", true),
                 Boolean(u"shift\u5207\u6362\u4e2d\u82f1\u6587", true),
@@ -299,7 +302,15 @@ namespace tiger::core
                 _snapshot = std::move(next);
                 _version = _version == std::numeric_limits<int>::max() ? 0 : _version + 1;
                 _settings = _snapshot->InputSettings(_version);
-                if (sentenceEnabled)
+                if (sentenceEnabled && migrated && !_sentence->Snapshot())
+                {
+                    // Keep menu/schema changes cheap. The sentence decoder is
+                    // constructed on the first key, like the reference macOS
+                    // host, so InputMethodKit never blocks during menu action.
+                    if (migrated) _session.RefreshAfterSchemaSwitch(_settings);
+                    _session.Page(*_snapshot->schema, *_snapshot->pinyin, _settings);
+                }
+                else if (sentenceEnabled)
                 {
                     if (_sentence->Snapshot()) _sentence->Refresh(_snapshot);
                     else if (!_sentence->MigrateFromOrdinary(_session, _snapshot)) _sentence->Refresh(_snapshot);

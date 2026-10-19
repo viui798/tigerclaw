@@ -16,7 +16,8 @@ InputMethodKit。Windows 的 TSF 前端、命名管道 Core、Overlay/Dialog 进
   鼠标点选、四码无重自动上屏、退格/Esc/Enter/Tab、中文标点；
 - **虎整句**：连续编码实时组句，候选随输入更新；↑ ↓ 选择整句候选，
   空格确认；长候选自动分页；
-- **方案切换**：输入法菜单 → 虎爪 → 虎码字词 / 虎整句；选择写入
+- **方案切换**：先聚焦一个可编辑文本框，再点输入法菜单 → TigerClaw →
+  虎码字词 / 虎整句；选择写入
   `~/Library/Application Support/TigerClaw/config.txt`；
 - **候选窗**：跟随插入点，越界翻到光标上方；纵向/横向布局跟随
   `候选布局`（1/3 横向，2/4 纵向）；显示序号、页码、鼠标点选；
@@ -163,6 +164,8 @@ ctest --test-dir macos/build --output-on-failure
   Tab 自学习尚未做端到端验收（详见 `PORTING.md`）。
 - 405 MB 模型不随源码分发；不设置模型时只有字词方案。
 - 安装包为 ad-hoc 签名；系统级安装需要管理员；首次启用可能需要注销重登。
+- IMK 的方案菜单项只在有可编辑文本客户端聚焦时出现；没有焦点文本框时
+  输入法菜单只显示系统项。
 - 候选窗几何依赖客户端实现：优先 `firstRectForCharacterRange`，再
   `attributesForCharacterIndex:lineHeightRectangle:`，最后鼠标位置；
   WebView 不返回几何时只能落在鼠标附近。
@@ -176,6 +179,8 @@ ctest --test-dir macos/build --output-on-failure
 | 输入源列表里没有虎爪 | 确认安装目录、`--register-input-source`，注销重登 |
 | 列表里有但灰色 | `lsregister -u <旧路径>` 后重新登记安装副本 |
 | 选中无反应 | 看 `log show --last 5m --predicate 'process == "TigerClaw"'` |
+| 菜单里没有虎整句/虎码字词 | 先聚焦一个可编辑文本框，IMK 只在输入法激活时提供自定义菜单 |
+| 点方案菜单无反应 | 旧版把 command dictionary 当 NSMenuItem；本版已修复，若仍出现请确认安装的是最新构建 |
 | 候选窗不出现 | 确认 App 未被 Gatekeeper 拦截；面板需 `hidesOnDeactivate=NO` |
 | 方向键后编码消失 | 只实现了 `handleEvent:`，不要再加 `inputText:` |
 | 分号/引号选重无效 | 标点必须映射到 VK 186/222，不能传 ASCII |

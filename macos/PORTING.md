@@ -177,7 +177,23 @@ com.viui.inputmethod.TigerClaw.Hans  enabled=1 selectable=1 selected=1
 
 如果仍失败，注销重登或手动到“系统设置 → 键盘 → 输入法”添加。
 
-### 3.8 LaunchServices 残留
+### 3.8 输入法菜单的 sender 不是 NSMenuItem
+
+IMK 不把 `NSMenuItem` 直接交给 `selectSchema:`；命令通过
+`doCommandBySelector:commandDictionary:` 下发，sender 是 `NSDictionary`。
+原实现执行 `sender.representedObject`，抛
+`-[__NSDictionaryM representedObject]: unrecognized selector`，菜单点击
+在控制台留下异常、方案却不切换——外观上就是“虎整句用不了”。
+
+处理：`SchemaNameFromSender()` 同时接受 `NSMenuItem` 和 command
+dictionary，从字典的 `representedObject` / 菜单项对象 / `tag` 取方案名；
+菜单项仍设置 `representedObject` 和 `tag` 作为双保险。切换成功后清 marked
+text、候选窗和组合状态，并写入 `config.txt`。
+
+注意：IMK 的“重新载入词库/打开配置目录”也走同一条命令路径，因此它们
+同样不能再假设 sender 是菜单项。
+
+### 3.9 LaunchServices 残留
 
 用 `build/TigerClaw.app` 注册过一次后，LaunchServices 会一直指向 build 路径；
 即使安装了 `~/Library/Input Methods/TigerClaw.app`，输入源也可能变灰。

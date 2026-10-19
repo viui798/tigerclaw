@@ -370,23 +370,38 @@ namespace tigerclaw::macos
             error = "Engine is not ready";
             return false;
         }
+        std::u16string previousSchema;
         try
         {
+            previousSchema = _input->SchemaName();
             bool changed = false;
             std::u16string configError;
-            if (!_input->SetConfig(ConfigFileKey, name, changed, configError))
+            // Prepare the lexicon snapshot without mutating the live input
+            // host. This mirrors Windows prepare/publish schema switching.
+            if (!_runtime->SetConfig(ConfigFileKey, name, changed, configError))
             {
                 error = Utf8(configError);
                 return false;
             }
+            auto upper = tiger::core::MakeUpperCaseServices([](std::u16string_view) {});
+            auto prepared = std::make_unique<tiger::core::RuntimeInput>(*_runtime, std::move(upper),
+                _paths.modelFile, static_cast<tiger::core::SentenceServiceLifecycle*>(nullptr), true);
             _runtime->SaveConfig(_paths.configFile);
+            _input.swap(prepared);
             _lastResult.reset();
             LoadUiSettings();
             return true;
         }
         catch (const std::exception& failure)
         {
+            if (!previousSchema.empty()) {
+                bool ignoredChanged = false; std::u16string ignoredError;
+                _runtime->SetConfig(ConfigFileKey, previousSchema, ignoredChanged, ignoredError);
+            }
             error = failure.what();
+            std::fprintf(stderr, "TigerClaw schema switch failed: %s (model=%s exists=%d)\n",
+                error.c_str(), _paths.modelFile.string().c_str(),
+                std::filesystem::exists(_paths.modelFile) ? 1 : 0);
             return false;
         }
     }

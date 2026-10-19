@@ -30,6 +30,15 @@ Tab learning events, settings/skin/export UI, full-pinyin schema, Developer ID)
 are in `macos/PORTING.md`. The 405 MB model is not committed; set
 `TIGERCLAW_SENTENCE_MODEL` before building.
 
+Follow-up 2026-10-19: the schema menu did not switch because InputMethodKit
+passes the command dictionary (not the NSMenuItem) to the action; asking it for
+`representedObject` raised an exception. `SchemaNameFromSender` now reads the
+name from both forms, and sentence activation is prepared lazily so the menu
+does not block. Verified live: 字词 → menu 虎整句 → `t`/空格 → 我, back to
+字词 → `f`/空格 → 一; the selection persists across an IME restart. The menu
+items only exist while an editable text client has focus, which is normal IMK
+behavior.
+
 ## Candidate layout choices (2026-10-12)
 
 Developed in isolated `C:\Users\yc\Desktop\tigerclaw-layout-20261011`, branch
