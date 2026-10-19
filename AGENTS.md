@@ -5,6 +5,31 @@ protocol, user, porting and model documents are indexed in `docs/README.md`.
 
 Last reorganized: 2026-08-28.
 
+## macOS InputMethodKit port (2026-10-19)
+
+`macos/` now builds `TigerClaw.app` (Bundle ID `com.viui.inputmethod.TigerClaw`,
+input source 虎爪) from the same portable C++ Core. No TSF, named pipes,
+Overlay or Dialog are involved: `TigerClawEngine` owns `RuntimeLexicons` +
+`RuntimeInput` and the IMK controller calls them directly. 虎码字词 and 虎整句
+work with the existing Tigirl fivegram model
+(SHA256 `756f6c92…`), including candidate paging, mouse selection, pinyin
+reverse lookup (`` ` ``), Shift/Ctrl+Space, add-word and per-user config at
+`~/Library/Application Support/TigerClaw/`.
+
+Portability changes in the shared Core: `AtomicSharedPtr.h`, `__APPLE__`
+branches in `RuntimePaths.cpp` and `LexiconOrder.cpp`, a forced-include
+`macos/compat/stop_token`, sentence-page projection in `RuntimeInput::ReadPage`,
+and new `SelectSentenceCandidate` / `AddWord` host APIs. Windows builds do not
+use these branches except the new public APIs.
+
+Evidence: `ctest` engine probe passes; TIS source enabled/selected; TextEdit
+typing covered four-code auto-commit (`tuja` → 我们), digits/semicolon/mouse /
+page keys, punctuation, Backspace/Esc/Enter/Tab, Shift toggle, pinyin reverse
+lookup and sentence selection. Details, screenshots and known gaps (sentence
+Tab learning events, settings/skin/export UI, full-pinyin schema, Developer ID)
+are in `macos/PORTING.md`. The 405 MB model is not committed; set
+`TIGERCLAW_SENTENCE_MODEL` before building.
+
 ## Candidate layout choices (2026-10-12)
 
 Developed in isolated `C:\Users\yc\Desktop\tigerclaw-layout-20261011`, branch

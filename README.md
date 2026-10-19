@@ -7,6 +7,20 @@
 `publish_core_arm64.bat` / `publish_arm64_cpp_core.bat` 用于 ARM64 Core 单独更新。
 C# Core 保留作历史实现与差分测试参考；全拼开发在独立 claw_pinyin 仓库。
 
+## macOS 移植
+
+`macos/` 是 TigerClaw 的 InputMethodKit 前端，复用同一套 C++ Core（虎码字词 +
+虎整句 + 拼音反查 + 五 gram），不经过 Windows TSF/管道/Overlay。
+
+- [macOS 使用与构建](macos/README.md)
+- [移植记录与验收](macos/PORTING.md)
+
+```sh
+export TIGERCLAW_SENTENCE_MODEL=/path/to/sentence-fivegram-mobile.bin
+macos/build.sh
+macos/install.sh
+```
+
 ## 文档入口
 
 - [用户使用说明书](用户使用说明书.md)
