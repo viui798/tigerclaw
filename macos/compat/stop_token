@@ -1,0 +1,99 @@
+#pragma once
+// Minimal std::stop_token / stop_source / stop_callback for Apple libc++.
+// Xcode 16's libc++ does not implement the C++20 stop-token facility yet; the
+// Windows MSVC build of the same core uses the standard types. This header is
+// force-included for the macOS build only so the shared sources stay unchanged.
+#include <atomic>
+#include <functional>
+#include <memory>
+#include <mutex>
+#include <utility>
+#include <vector>
+
+namespace std
+{
+    namespace tiger_stop_detail
+    {
+        struct State
+        {
+            atomic<bool> stopped{false};
+            mutex mutex_;
+            vector<function<void()>> callbacks;
+            bool Request()
+            {
+                bool expected = false;
+                if (!stopped.compare_exchange_strong(expected, true)) return false;
+                vector<function<void()>> pending;
+                {
+                    lock_guard<mutex> guard(mutex_);
+                    pending.swap(callbacks);
+                }
+                for (auto& callback : pending) callback();
+                return true;
+            }
+            bool Add(function<void()> callback)
+            {
+                {
+                    lock_guard<mutex> guard(mutex_);
+                    if (!stopped.load())
+                    {
+                        callbacks.push_back(std::move(callback));
+                        return true;
+                    }
+                }
+                callback();
+                return false;
+            }
+        };
+    }
+
+    struct nostopstate_t { explicit nostopstate_t() = default; };
+    inline constexpr nostopstate_t nostopstate{};
+
+    class stop_token
+    {
+        template <class> friend class stop_callback;
+        shared_ptr<tiger_stop_detail::State> state_;
+    public:
+        stop_token() = default;
+        explicit stop_token(shared_ptr<tiger_stop_detail::State> state) : state_(std::move(state)) {}
+        bool stop_requested() const { return state_ && state_->stopped.load(); }
+        bool stop_possible() const { return static_cast<bool>(state_); }
+    };
+
+    class stop_source
+    {
+        shared_ptr<tiger_stop_detail::State> state_;
+    public:
+        stop_source() : state_(make_shared<tiger_stop_detail::State>()) {}
+        explicit stop_source(nostopstate_t) {}
+        stop_token get_token() const { return stop_token(state_); }
+        bool request_stop() { return state_ ? state_->Request() : false; }
+        bool stop_requested() const { return state_ && state_->stopped.load(); }
+        bool stop_possible() const { return static_cast<bool>(state_); }
+    };
+
+    template <class Callback>
+    class stop_callback
+    {
+        shared_ptr<tiger_stop_detail::State> state_;
+        Callback callback_;
+    public:
+        using callback_type = Callback;
+        template <class C>
+        explicit stop_callback(const stop_token& token, C&& callback)
+            : state_(token.state_), callback_(std::forward<C>(callback))
+        {
+            if (state_) state_->Add([this] { callback_(); });
+        }
+        template <class C>
+        explicit stop_callback(stop_token&& token, C&& callback)
+            : state_(std::move(token.state_)), callback_(std::forward<C>(callback))
+        {
+            if (state_) state_->Add([this] { callback_(); });
+        }
+        ~stop_callback() = default;
+        stop_callback(const stop_callback&) = delete;
+        stop_callback& operator=(const stop_callback&) = delete;
+    };
+}

@@ -1,0 +1,10 @@
+#!/bin/sh
+# Register the input source for the console user. A logout/login is still the
+# reliable way to refresh the Text Input Sources database after installation.
+CONSOLE_USER="$(/usr/bin/stat -f%Su /dev/console)"
+if [ -n "$CONSOLE_USER" ] && [ "$CONSOLE_USER" != "root" ]; then
+  /usr/bin/su -l "$CONSOLE_USER" -c \
+    '"/Library/Input Methods/TigerClaw.app/Contents/MacOS/TigerClaw" --register-input-source' \
+    >/dev/null 2>&1 || true
+fi
+exit 0

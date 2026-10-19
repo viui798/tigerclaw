@@ -1,0 +1,3 @@
+build/
+resources/Models/*.bin
+*.pkg

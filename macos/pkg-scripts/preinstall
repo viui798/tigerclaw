@@ -1,0 +1,7 @@
+#!/bin/sh
+# Remove any previous copy before the payload is laid down. PackageKit
+# relocates an app with the same bundle identifier into a .localized folder
+# when an old copy is present, which leaves a stale input source behind.
+rm -rf "/Library/Input Methods/TigerClaw.app"
+rm -rf "/Library/Input Methods/.localized/TigerClaw.app" 2>/dev/null || true
+exit 0
