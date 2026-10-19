@@ -21,4 +21,9 @@ namespace tigerclaw::macos
     // TigerClaw's composition engine. The table is the complete US ANSI map;
     // missing slots would shift every later key.
     PhysicalKey KeyFromEvent(void* event);
+
+    // Same mapping for IMK's inputText:key:modifiers:client: entry point, which
+    // supplies a hardware keyCode and NSEventModifierFlags but no NSEvent.
+    PhysicalKey KeyFromKeyCode(unsigned short keyCode, unsigned long modifierFlags,
+        bool down = true, bool repeat = false);
 }

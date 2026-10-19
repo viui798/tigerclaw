@@ -24,6 +24,10 @@ InputMethodKit。Windows 的 TSF 前端、命名管道 Core、Overlay/Dialog 进
 - **拼音反查**：`` ` `` 进入拼音反查（需要 `拼音反查码表`，随包提供）；
 - **中英切换**：Shift / Ctrl+Space（使用引擎原有配置）；
 - **加词**：Ctrl+= 打开加词窗口，写入当前方案的 `用户调整.txt`；
+- **Chromium/Electron 客户端**（Chrome、DeepSeek Harness、VS Code 等）走
+  IMK 的 `inputText:key:modifiers:client:` 路径；本版已实现该入口，与
+  `handleEvent:` 共用同一个引擎。安装/更新输入法后需要重启这些客户端一次，
+  Chromium 才会重新枚举输入法。建议把 App 装到 `/Library/Input Methods`。
 - 用户配置、词库调整、自学习目录均在
   `~/Library/Application Support/TigerClaw/`，升级 App 不会覆盖。
 
@@ -54,8 +58,8 @@ macos/build.sh
 ## 安装
 
 ```sh
+sudo macos/install.sh         # 系统级（推荐；写 /Library/Input Methods）
 macos/install.sh              # 当前用户（写 ~/Library/Input Methods）
-sudo macos/install.sh         # 系统级（写 /Library/Input Methods）
 ```
 
 安装脚本会：
@@ -166,6 +170,10 @@ ctest --test-dir macos/build --output-on-failure
 - 安装包为 ad-hoc 签名；系统级安装需要管理员；首次启用可能需要注销重登。
 - IMK 的方案菜单项只在有可编辑文本客户端聚焦时出现；没有焦点文本框时
   输入法菜单只显示系统项。
+- Chromium/Electron 客户端在安装/更新输入法后必须重启（Chrome、DeepSeek
+  Harness、Electron 应用都缓存了输入法列表）；只切换输入源不足以刷新。
+- Shift 切换中英文在 `inputText` 路径客户端上尚未验证；这些客户端请先用
+  Ctrl+Space 切换中英。
 - 候选窗几何依赖客户端实现：优先 `firstRectForCharacterRange`，再
   `attributesForCharacterIndex:lineHeightRectangle:`，最后鼠标位置；
   WebView 不返回几何时只能落在鼠标附近。
@@ -177,6 +185,7 @@ ctest --test-dir macos/build --output-on-failure
 | 症状 | 处理 |
 | --- | --- |
 | 输入源列表里没有虎爪 | 确认安装目录、`--register-input-source`，注销重登 |
+| Chrome/DeepSeek/Electron 打不了字 | 安装到 `/Library/Input Methods`，然后完全退出并重开该应用；输入法列表是客户端启动时缓存的 |
 | 列表里有但灰色 | `lsregister -u <旧路径>` 后重新登记安装副本 |
 | 选中无反应 | 看 `log show --last 5m --predicate 'process == "TigerClaw"'` |
 | 菜单里没有虎整句/虎码字词 | 先聚焦一个可编辑文本框，IMK 只在输入法激活时提供自定义菜单 |

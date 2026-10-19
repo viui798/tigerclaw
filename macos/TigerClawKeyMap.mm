@@ -3,22 +3,20 @@
 
 namespace tigerclaw::macos
 {
-    PhysicalKey KeyFromEvent(void* raw)
+    PhysicalKey KeyFromKeyCode(unsigned short keyCode, unsigned long modifierFlags,
+        bool down, bool repeat)
     {
-        NSEvent* event = (__bridge NSEvent*)raw;
         PhysicalKey result;
-        if (!event) return result;
-
         // US ANSI keyCode table (0..49). Explicit cases below cover the keys
         // whose slots are left empty here (section, return, tab, space).
         static const int letters[] = {
             'A','S','D','F','H','G','Z','X','C','V', 0, 'B','Q','W','E','R','Y','T',
             '1','2','3','4','6','5','=','9','7','-','8','0',']','O','U','[','I','P',
-            0, 'L','J','\'','K',';','\\',',','/','N','M','.','`'
+            0, 'L','J','\'', 'K',';','\\',',','/','N','M','.','`'
         };
-        const auto code = static_cast<std::size_t>(event.keyCode);
+        const auto code = static_cast<std::size_t>(keyCode);
         result.virtualKey = code < sizeof(letters) / sizeof(*letters) ? letters[code] : 0;
-        switch (event.keyCode)
+        switch (keyCode)
         {
             case 36: case 76: result.virtualKey = 13; break; // return / keypad enter
             case 48: result.virtualKey = 9; break;           // tab
@@ -52,9 +50,9 @@ namespace tigerclaw::macos
                 return result; // modifier keys keep virtualKey 0 / valid false
             default: break;
         }
-        auto flags = event.modifierFlags;
-        result.down = event.type == NSEventTypeKeyDown;
-        result.repeat = event.isARepeat ? 2 : 1;
+        auto flags = static_cast<NSEventModifierFlags>(modifierFlags);
+        result.down = down;
+        result.repeat = repeat ? 2 : 1;
         result.shift = (flags & NSEventModifierFlagShift) != 0;
         result.ctrl = (flags & NSEventModifierFlagControl) != 0;
         result.alt = (flags & NSEventModifierFlagOption) != 0;
@@ -62,5 +60,13 @@ namespace tigerclaw::macos
         result.capsLock = (flags & NSEventModifierFlagCapsLock) != 0;
         result.valid = result.virtualKey != 0;
         return result;
+    }
+
+    PhysicalKey KeyFromEvent(void* raw)
+    {
+        NSEvent* event = (__bridge NSEvent*)raw;
+        if (!event) return {};
+        return KeyFromKeyCode(event.keyCode, event.modifierFlags,
+            event.type == NSEventTypeKeyDown, event.isARepeat);
     }
 }

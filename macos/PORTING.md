@@ -193,7 +193,35 @@ text、候选窗和组合状态，并写入 `config.txt`。
 注意：IMK 的“重新载入词库/打开配置目录”也走同一条命令路径，因此它们
 同样不能再假设 sender 是菜单项。
 
-### 3.9 LaunchServices 残留
+### 3.9 Chromium/Electron 的 `inputText:` 路径
+
+Chrome、DeepSeek Harness、VS Code 等 Chromium/Electron 客户端不会走
+`handleEvent:`，而是把按键以
+`inputText:key:modifiers:client:` 交给输入法。只实现 `handleEvent:` 时，
+这些客户端直接把字母原样插入，marked text、候选窗和上屏都不会出现。
+
+处理：
+
+- `inputText:key:modifiers:client:` 用硬件 keyCode + 修饰键映射到同一个
+  `PhysicalKey`，再走 `processPhysicalKey:client:`；
+- Backspace 在该路径下是 `key=51 string="^H"`（长度 2），不能按“多字符文本”
+  丢弃，控制键必须放行；
+- 方向键也以单字符控制串进入 `inputText:`，组合期间左右/Home/End 直接吞掉，
+  ↑↓ 在字词方案转成翻页键；`didCommandBySelector:` 仍保留给其他客户端；
+- `inputText:client:` 仅记录并返回 NO（粘贴/多字符文本交给客户端）。
+
+实测（Chrome，系统级安装）：
+
+- `u` → marked `u`，空格 → `的`；
+- 组合中 Backspace → 清码，不删正文；
+- `ae` ↓ `1` → 第二页第一候选 `乁`；
+- TextEdit 同时保持 `u` 空格 → `的`。
+
+**客户端缓存**：Chromium 在启动时枚举输入法；安装/更新虎爪后必须完全退出并
+重开 Chrome/DeepSeek，光切换输入源不够。DeepSeek Harness 当前会话仍在用旧
+输入法列表，重启后才会走新路径。
+
+### 3.10 LaunchServices 残留
 
 用 `build/TigerClaw.app` 注册过一次后，LaunchServices 会一直指向 build 路径；
 即使安装了 `~/Library/Input Methods/TigerClaw.app`，输入源也可能变灰。

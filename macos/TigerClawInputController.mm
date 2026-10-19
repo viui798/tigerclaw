@@ -164,9 +164,9 @@ static NSString *SchemaNameFromSender(id sender)
 
 - (NSUInteger)recognizedEvents:(id)sender
 {
-    // IMK only forwards key events to handleEvent: when declared here. Text
-    // events are deliberately not implemented: inputText: would take priority
-    // and arrows/space would never reach the candidate list.
+    // Declare key events so clients using the handleEvent path reach the IME.
+    // Electron/Chromium may instead use inputText:/didCommandBySelector:; those
+    // entry points are wired to the same engine below.
     return NSEventMaskKeyDown | NSEventMaskFlagsChanged;
 }
 
@@ -474,16 +474,8 @@ static NSString *SchemaNameFromSender(id sender)
     [self applySnapshot:snapshot client:_client];
 }
 
-- (BOOL)handleEvent:(NSEvent *)event client:(id)client
+- (BOOL)processPhysicalKey:(tigerclaw::macos::PhysicalKey)physical client:(id)client
 {
-    if (event.type == NSEventTypeFlagsChanged)
-    {
-        [self handleFlagsChanged:event];
-        return NO;
-    }
-    if (event.type != NSEventTypeKeyDown) return NO;
-    if (!Engine::Shared().Ready()) return NO;
-    tigerclaw::macos::PhysicalKey physical = tigerclaw::macos::KeyFromEvent((__bridge void *)event);
     if (!physical.valid) return NO;
     if (physical.command) return NO; // Command shortcuts belong to the client
 
@@ -526,6 +518,81 @@ static NSString *SchemaNameFromSender(id sender)
               ToNSString(snapshot.schema), ToNSString(snapshot.markedText), ToNSString(snapshot.commit),
               snapshot.candidates.size(), snapshot.decodePending);
     [self applySnapshot:snapshot client:client];
+    return YES;
+}
+
+- (BOOL)handleEvent:(NSEvent *)event client:(id)client
+{
+    if (std::getenv("TIGERCLAW_DEBUG"))
+        NSLog(@"TigerClaw handleEvent type=%ld key=%d", (long)event.type, event.keyCode);
+    if (event.type == NSEventTypeFlagsChanged)
+    {
+        [self handleFlagsChanged:event];
+        return NO;
+    }
+    if (event.type != NSEventTypeKeyDown) return NO;
+    if (!Engine::Shared().Ready()) return NO;
+    return [self processPhysicalKey:tigerclaw::macos::KeyFromEvent((__bridge void *)event) client:client];
+}
+
+// Electron/Chromium and some other NSTextInputClient hosts take the IMK
+// inputText path instead of handleEvent:. Both paths must feed the same engine;
+// without this method those clients insert the raw key and never show marked
+// text or candidates.
+- (BOOL)inputText:(NSString *)string key:(NSInteger)keyCode modifiers:(NSUInteger)flags client:(id)sender
+{
+    if (!Engine::Shared().Ready()) return NO;
+    if (keyCode < 0) return NO;
+    // Chromium supplies "^H" for Backspace and often an empty string for
+    // Space/Return. Only reject multi-character text that is not a control key.
+    bool controlKey = keyCode == 51 || keyCode == 117 || keyCode == 36 ||
+        keyCode == 48 || keyCode == 53;
+    if (string.length > 1 && !controlKey) return NO;
+    if (std::getenv("TIGERCLAW_DEBUG"))
+        NSLog(@"TigerClaw inputText key=%ld flags=%lu string=%@", (long)keyCode,
+              (unsigned long)flags, string);
+    return [self processPhysicalKey:tigerclaw::macos::KeyFromKeyCode(
+        (unsigned short)keyCode, (unsigned long)flags, true, false) client:sender];
+}
+
+- (BOOL)inputText:(NSString *)string client:(id)sender
+{
+    if (std::getenv("TIGERCLAW_DEBUG"))
+        NSLog(@"TigerClaw inputText:client string=%@", string);
+    return NO;
+}
+
+- (BOOL)didCommandBySelector:(SEL)selector client:(id)sender
+{
+    if (std::getenv("TIGERCLAW_DEBUG"))
+        NSLog(@"TigerClaw didCommand %@ composing=%d", NSStringFromSelector(selector), _composing);
+    if (!_composing || !Engine::Shared().Ready()) return NO;
+    int vk = 0;
+    bool shift = false;
+    if (selector == @selector(moveLeft:)) vk = 37;
+    else if (selector == @selector(moveRight:)) vk = 39;
+    else if (selector == @selector(moveUp:)) vk = 38;
+    else if (selector == @selector(moveDown:)) vk = 40;
+    else if (selector == @selector(moveToBeginningOfLine:)) vk = 36;
+    else if (selector == @selector(moveToEndOfLine:)) vk = 35;
+    else if (selector == @selector(deleteBackward:)) vk = 8;
+    else if (selector == @selector(deleteForward:)) vk = 46;
+    else if (selector == @selector(insertNewline:)) vk = 13;
+    else if (selector == @selector(insertTab:)) vk = 9;
+    else if (selector == @selector(insertBacktab:)) { vk = 9; shift = true; }
+    else if (selector == @selector(cancelOperation:)) vk = 27;
+    if (!vk) return NO;
+    // Protect the composition from caret movement; Up/Down and the editing
+    // commands are then handled by the engine exactly like handleEvent.
+    if (vk == 37 || vk == 39 || vk == 36 || vk == 35) return YES;
+    if (!_sentenceSchema && (vk == 38 || vk == 40)) vk = vk == 38 ? 189 : 187;
+    KeyInput input;
+    input.virtualKey = vk;
+    input.down = true;
+    input.shift = shift;
+    Snapshot snapshot = Engine::Shared().Process(input);
+    if (!snapshot.handled) return YES; // keep the composition inert
+    [self applySnapshot:snapshot client:sender];
     return YES;
 }
 

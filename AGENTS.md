@@ -39,6 +39,14 @@ does not block. Verified live: 字词 → menu 虎整句 → `t`/空格 → 我,
 items only exist while an editable text client has focus, which is normal IMK
 behavior.
 
+Chromium/Electron (Chrome, DeepSeek Harness, VS Code) use
+`inputText:key:modifiers:client:` rather than `handleEvent:`; the controller now
+feeds both entry points into one engine. Chrome was verified after a full client
+restart (`u`/space → 的, Backspace clears the code, `ae`/↓/1 → 乁). Chromium
+caches input methods at launch, so clients must be restarted after installing or
+updating the IME; switching only the input source is insufficient. Shift
+toggling in the inputText path is not yet verified; use Ctrl+Space there.
+
 ## Candidate layout choices (2026-10-12)
 
 Developed in isolated `C:\Users\yc\Desktop\tigerclaw-layout-20261011`, branch

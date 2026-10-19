@@ -14,8 +14,9 @@ elif [[ -w "/Library/Input Methods" ]]; then
   target="/Library/Input Methods"
 else
   target="$HOME/Library/Input Methods"
-  echo "note: /Library/Input Methods is not writable; installing for the current user."
-  echo "      Use 'sudo $0' for a system-wide installation."
+  echo "warning: /Library/Input Methods is not writable; installing for the current user."
+  echo "         Chrome/DeepSeek/VS Code (Chromium/Electron) may only pick up a"
+  echo "         system-wide input method. Use 'sudo $0' or the .pkg for those apps."
 fi
 mkdir -p "$target"
 installed="$target/TigerClaw.app"
