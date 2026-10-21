@@ -1,6 +1,6 @@
 # 移植记录：TigerClaw → macOS InputMethodKit
 
-参考实现：`/Users/viui/Desktop/Tigirl macOS/macos/`（Tigirl 0.3.4）。
+参考实现：Tigirl 0.3.4 的 macOS 前端（历史参考，不是构建依赖）。
 本目录是 **TigerClaw** 的 macOS 前端，不是把 Tigirl 换个名字：词库格式、
 组句引擎、配置项、方案名和五 gram 模型都来自 TigerClaw 主线。
 
@@ -117,8 +117,9 @@ TigerClawPreloadEngine();   // 词库解析，约 0.5–1.5 s
 
 ### 3.3 按键路径
 
-只实现 `handleEvent:`，不实现 `inputText:`；否则 IMK 走文本解包路径，
-方向键/翻页键永远不会进输入法。`recognizedEvents:` 返回
+同时实现 `handleEvent:` 和 Chromium/Electron 使用的
+`inputText:key:modifiers:client:`，统一交给同一个按键处理方法（见 3.9）。
+`recognizedEvents:` 返回
 `NSKeyDownMask | NSFlagsChangedMask`。
 
 Windows VK 映射：字母 `'A'..'Z'`、数字 `'0'..'9'`、标点必须用
@@ -336,3 +337,11 @@ launchctl setenv TIGERCLAW_DEBUG 1     # 打印每个按键的 handled/composing
 launchctl unsetenv TIGERCLAW_DEBUG
 log show --last 5m --predicate 'process == "TigerClaw"'
 ```
+
+## 2026-10-21 构建复核
+
+- 当前源码与 GitHub main 的 macOS 实现一致（基线 `0ae62cf`）。
+- 在 macOS 上重新构建、ad-hoc 签名成功；`tigerclaw_engine` 1/1 通过，使用真实整句模型。
+- 模型 SHA256：`756f6c92cf43ad6e8e3087ce66b711ac6ad0fc41e6f3fb82b3766e35ecab8681`。
+- 模型独立保存在忽略的 `macos/resources/Models/`，构建不再依赖本机 Tigirl 目录。
+- 此次复核没有新增实际应用打字验收；先前实测记录和未完成项仍按本文记录。
